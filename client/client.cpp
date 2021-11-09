@@ -59,8 +59,12 @@ void receive_msg(char *msg, int buf_size, int sock){
 
 int main(int argc, char *argv[]){
     char *ip = "127.0.0.1";
+    char *port = "2012";
     if(argc == 2){
         ip = argv[1];
+    }else if(argc == 3){
+        ip = argv[1];
+        port = argv[2];
     }
     
     struct addrinfo hints; //contains information that is passed to getaddrinfo
@@ -72,7 +76,7 @@ int main(int argc, char *argv[]){
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-    if(getaddrinfo(ip, "2012", &hints, &res) != 0){
+    if(getaddrinfo(ip, port, &hints, &res) != 0){
         std::cout << "getaddrinfo failure";
         exit(1);
     }
