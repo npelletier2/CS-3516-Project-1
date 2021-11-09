@@ -8,7 +8,7 @@ std::string decode_qr(std::string filename){
     //TODO
     std::array<char, 128> buffer;
     std::string result = "";
-    std::string cmd = "java -cp ../ZXing/javase.jar:../ZXing/core.jar com.google.zxing.client.j2se.CommandLineRunner " + filename;
+    std::string cmd = "java -cp ZXing/javase.jar:ZXing/core.jar com.google.zxing.client.j2se.CommandLineRunner " + filename;
     
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose); 
 
