@@ -11,6 +11,8 @@
 #include "qr_decoder.hpp"
 #include <arpa/inet.h>
 #include <time.h>
+#include <vector>
+#include <sys/wait.h>
 
 //TODO actually use these arguments
 struct server_args *args = (struct server_args *) malloc(sizeof(server_args));
@@ -24,7 +26,7 @@ void admin_log(std::string msg, std::string from = "SERVER"){
 }
 
 //returns the number of bytes recieved into buf
-int recv_wrapper(int sock, char *buf, size_t n, int flags){
+size_t recv_wrapper(int sock, char *buf, size_t n, int flags){
     char temp[n];//buffer to store message parts
     
     //loop until entire message is received
@@ -48,45 +50,131 @@ int recv_wrapper(int sock, char *buf, size_t n, int flags){
     return tot_bytes_received;
 }
 
-void handle_client(int new_sock, std::string ip){
-    //get the size of the file
-    int msg_size;
-    recv_wrapper(new_sock, (char *)&msg_size, sizeof(int), 0);
-
-    //max 100 KB
-    if(msg_size > 102400){
-        msg_size = 102400;
-    }
-
-    //get the qr image
-    char msg[msg_size];
-    int tot_bytes_received = recv_wrapper(new_sock, msg, msg_size, 0);
-
-    //use PID for filename to ensure different filenames for different concurrent threads
-    std::string qr_filename = "qr_images/" + std::to_string(getpid()) + ".png";
+size_t send_wrapper(int sock, unsigned int code, const void *buf, size_t n, int flags){
+    //create server message
+    char tosend[n+2*sizeof(unsigned int)];
+    memcpy(tosend, &code, sizeof(unsigned int));
+    memcpy(tosend+sizeof(unsigned int), &n, sizeof(unsigned int));
+    if(buf != NULL) memcpy(tosend+2*sizeof(unsigned int), buf, n);
     
-    //write received qr code image to the file
-    std::ofstream qr_file(qr_filename, std::ios::binary);
-    qr_file.write(msg, tot_bytes_received);
-    qr_file.close();
-
-    admin_log("Recieved message", ip);
-
-    //decode the qr image
-    std::string qr_decoded = decode_qr(qr_filename);
-
-    //delete file used to store qr code image
-    remove(qr_filename.c_str());
-
-    admin_log("QR decoded", ip);
-
-    //send the string from the qr code back to client
-    off_t bytes_sent = 0;
-    while(bytes_sent < qr_decoded.size()){
-        bytes_sent += send(new_sock, qr_decoded.c_str(), qr_decoded.size(), 0);
+    //send server message
+    size_t bytes_sent = 0;
+    while(bytes_sent < n+2*sizeof(unsigned int)){
+        bytes_sent += send(sock, tosend, n+2*sizeof(unsigned int), flags);
     }
 
-    admin_log("Decoded QR sent", ip);
+    return bytes_sent;
+}
+
+//Send the decoded qr code
+void send_success(int sock, const char *buf, unsigned int n){
+    send_wrapper(sock, 0, buf, n, 0);
+}
+
+//Send a failure message
+void send_failure(int sock){
+    send_wrapper(sock, 1, NULL, 0, 0);
+}
+
+//Send a message alerting a client about a timeout
+void send_timeout(int sock){
+    std::string msg = "The connection has timed out";
+    send_wrapper(sock, 2, msg.c_str(), msg.length()+1, 0);
+}
+
+//Send a message alerting the client that the server is busy
+void send_busy(int sock){
+    std::string msg = "The server is busy";
+    send_wrapper(sock, 2, msg.c_str(), msg.length()+1, 0);
+}
+
+//Send a message alerting a client about exceeding the rate limit
+void send_rate_limit_exceeded(int sock){
+    std::string msg = "Rate limit exceeded";
+    send_wrapper(sock, 3, msg.c_str(), msg.length()+1, 0);
+}
+
+//Returns false if the socket has been closed by the client, true otherwise
+bool client_connected(int sock, std::string ip){
+    //wait until there is data to be read or timeout
+    fd_set socks;
+    struct timeval timeout;
+    FD_ZERO(&socks);
+    FD_SET(sock, &socks);
+    timeout.tv_sec = args->time_out;
+    timeout.tv_usec = 0;
+    int select_rv = select(sock+1, &socks, NULL, NULL, &timeout);
+    if(select_rv < 0){
+        std::cout << "select error" << std::endl;
+        exit(0);
+    }
+    if(select_rv == 0){//select timed out, return false to end connection
+        send_timeout(sock);
+        admin_log("The connection has timed out", ip);
+        return false;
+    }
+
+    //Check if client has closed the connection
+    char buf[8];
+    if(recv(sock, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT) == 0){
+        return false;
+    }
+
+    return true;
+}
+
+void handle_client(int new_sock, std::string ip){
+    int num_requests = 0;
+    time_t request_reset_time = time(0);
+    while(client_connected(new_sock, ip)){
+        //get the size of the file
+        unsigned int msg_size;
+        recv_wrapper(new_sock, (char *)&msg_size, sizeof(msg_size), 0);
+
+        //handle rate limiting (after first recv, since now is when we know a request has been received by the server)
+        if(time(0) - request_reset_time > args->rate_seconds){
+            num_requests = 0;
+            request_reset_time = time(0);
+        }
+        num_requests++;
+        if(num_requests > args->rate_requests){
+            send_rate_limit_exceeded(new_sock);
+            admin_log("Rate limit exceeded", ip);
+            continue;
+        }
+
+        //max 100 KB
+        if(msg_size > 102400){
+            msg_size = 102400;
+        }
+
+        //get the qr image
+        char msg[msg_size];
+        size_t tot_bytes_received = recv_wrapper(new_sock, msg, msg_size, 0);
+
+        //use PID for filename to ensure different filenames for different concurrent threads
+        std::string qr_filename = "qr_images/" + std::to_string(getpid()) + ".png";
+        
+        //write received qr code image to the file
+        std::ofstream qr_file(qr_filename, std::ios::binary);
+        qr_file.write(msg, tot_bytes_received);
+        qr_file.close();
+
+        admin_log("Recieved message", ip);
+
+        //decode the qr image
+        std::string qr_decoded = decode_qr(qr_filename);
+
+        //delete file used to store qr code image
+        remove(qr_filename.c_str());
+
+        admin_log("QR decoded", ip);
+
+        //send the string from the qr code back to client
+        send_success(new_sock, qr_decoded.c_str(), qr_decoded.size());
+
+        admin_log("Decoded QR sent", ip);
+    }
 }
 
 int main(int argc, char *argv[]){
@@ -117,6 +205,12 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 
+    int yes = 1;
+    if(setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1){
+        std::cout << "setsockopt failure" << std::endl;
+        exit(1);
+    }
+
     if(bind(listen_sock, res->ai_addr, res->ai_addrlen) != 0){
         std::cout << "bind failure" << std::endl;
         exit(1);
@@ -129,6 +223,7 @@ int main(int argc, char *argv[]){
 
     admin_log("Listening on socket " + std::to_string(listen_sock));
 
+    std::vector<pid_t> current_users;
     while(1){
         if((new_sock = accept(listen_sock, (struct sockaddr *)&client_addr, (socklen_t *)&addr_size)) == -1){
             std::cout << "accept failure" << std::endl;
@@ -136,20 +231,33 @@ int main(int argc, char *argv[]){
         }
 
         std::string client_ip = inet_ntoa(((struct sockaddr_in *)&client_addr)->sin_addr);
-        admin_log("Connection accepted", client_ip);
+        if(current_users.size() >= args->max_users){
+            send_busy(new_sock);
+            close(new_sock);
+            admin_log("Connection denied: server is busy", client_ip);
+            continue;
+        }else{
+            admin_log("Connection accepted", client_ip);
+        }
 
-        int fork_ret = fork();
+        pid_t fork_ret = fork();
         if(fork_ret == -1){
             std::cout << "fork failure" << std::endl;
             exit(1);
         }
         if(fork_ret != 0){//parent
             close(new_sock);
+            current_users.push_back(fork_ret);
+            for(int i = 0; i < current_users.size(); i++){
+                if(waitpid(current_users[i], NULL, WNOHANG) > 0){//this process has ended
+                    current_users.erase(current_users.begin() + i);
+                }
+            }
         }else{//child
             close(listen_sock);
             handle_client(new_sock, client_ip);
             close(new_sock);
-            admin_log("Connection closed by server", client_ip);
+            admin_log("Connection closed", client_ip);
             exit(0);
         }
     }
