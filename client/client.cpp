@@ -58,6 +58,11 @@ void receive_msg(char *msg, int buf_size, int sock){
 }
 
 int main(int argc, char *argv[]){
+    char *ip = "127.0.0.1";
+    if(argc == 2){
+        ip = argv[1];
+    }
+    
     struct addrinfo hints; //contains information that is passed to getaddrinfo
     struct addrinfo *res; //holds the results of getaddrinfo
     int sock; //socket descriptor of the socket used to handle client-server interaction
@@ -67,8 +72,7 @@ int main(int argc, char *argv[]){
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-    //TODO make the client able to connect to an IP address specified in cmd args
-    if(getaddrinfo("127.0.0.1", "2012", &hints, &res) != 0){
+    if(getaddrinfo(ip, "2012", &hints, &res) != 0){
         std::cout << "getaddrinfo failure";
         exit(1);
     }
