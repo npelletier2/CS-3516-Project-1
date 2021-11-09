@@ -179,6 +179,8 @@ void handle_client(int new_sock, std::string ip){
 }
 
 int main(int argc, char *argv[]){
+    admin_log("Server start");
+
     parse_args(argc, argv, args); //fill the args structure with command line args, or default values for args that aren't given
     
     struct addrinfo hints; //contains information that is passed to getaddrinfo

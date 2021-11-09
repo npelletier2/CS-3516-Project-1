@@ -92,8 +92,8 @@ void receive_msg(char *msg, unsigned int *code, unsigned int buf_size, int sock)
 }
 
 int main(int argc, char *argv[]){
-    char *ip = "127.0.0.1";
-    char *port = "2012";
+    char const *ip = "127.0.0.1";
+    char const *port = "2012";
     if(argc == 2){
         ip = argv[1];
     }else if(argc == 3){
@@ -127,20 +127,41 @@ int main(int argc, char *argv[]){
 
     //Communicating on socket sock
 
-    FILE *msg = fopen("qr_testing/project1_qr_code.png", "rb");
-
-    send_file(msg, sock);
-
-    fclose(msg);
-
     int buf_size = 1023;
     char recv_msg[buf_size+1];
     unsigned int code;
+
+    FILE *msg = fopen("qr_testing/project1_qr_code.png", "rb");
+    send_file(msg, sock);
+    fclose(msg);
+    memset(recv_msg, 0, buf_size+1);
     receive_msg(recv_msg, &code, buf_size, sock);
+    std::cout << "Message 1 received:\nCode: " << code << "\nMessage:\n" << recv_msg << std::endl;
+
+    msg = fopen("qr_testing/beej's-guide.png", "rb");
+    send_file(msg, sock);
+    fclose(msg);
+    memset(recv_msg, 0, buf_size+1);
+    receive_msg(recv_msg, &code, buf_size, sock);
+    std::cout << "Message 2 received:\nCode: " << code << "\nMessage:\n" << recv_msg << std::endl;
+
+    msg = fopen("qr_testing/project1_qr_code.png", "rb");
+    send_file(msg, sock);
+    fclose(msg);
+    memset(recv_msg, 0, buf_size+1);
+    receive_msg(recv_msg, &code, buf_size, sock);
+    std::cout << "Message 1 received:\nCode: " << code << "\nMessage:\n" << recv_msg << std::endl;
+
+    msg = fopen("qr_testing/beej's-guide.png", "rb");
+    send_file(msg, sock);
+    fclose(msg);
+    memset(recv_msg, 0, buf_size+1);
+    receive_msg(recv_msg, &code, buf_size, sock);
+    std::cout << "Message 2 received:\nCode: " << code << "\nMessage:\n" << recv_msg << std::endl;
 
     close(sock);
 
-    std::cout << "Message received:\nCode: " << code << "\nMessage:\n" << recv_msg << std::endl;
+    
 
     return 0;
 }

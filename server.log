@@ -1,0 +1,12 @@
+2021-11-09 18:15:53 SERVER: Server start
+2021-11-09 18:15:53 SERVER: Listening on socket 4
+2021-11-09 18:16:06 127.0.0.1: Connection accepted
+2021-11-09 18:16:06 127.0.0.1: Recieved message
+2021-11-09 18:16:06 127.0.0.1: QR decoded
+2021-11-09 18:16:06 127.0.0.1: Decoded QR sent
+2021-11-09 18:16:06 127.0.0.1: Connection closed
+2021-11-09 18:16:51 127.0.0.1: Connection accepted
+2021-11-09 18:16:51 127.0.0.1: Recieved message
+2021-11-09 18:16:52 127.0.0.1: QR decoded
+2021-11-09 18:16:52 127.0.0.1: Decoded QR sent
+2021-11-09 18:16:52 127.0.0.1: Connection closed
