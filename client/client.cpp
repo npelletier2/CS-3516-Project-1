@@ -77,17 +77,17 @@ int main(int argc, char *argv[]){
     hints.ai_flags = AI_PASSIVE;
 
     if(getaddrinfo(ip, port, &hints, &res) != 0){
-        std::cout << "getaddrinfo failure";
+        std::cout << "getaddrinfo failure" << std::endl;
         exit(1);
     }
 
     if((sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0){
-        std::cout << "socket failure";
+        std::cout << "socket failure" << std::endl;
         exit(1);
     }
 
     if(connect(sock, res->ai_addr, res->ai_addrlen)){
-        std::cout << "connect failure";
+        std::cout << "connect failure" << std::endl;
         exit(1);
     }
 

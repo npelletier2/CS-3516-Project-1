@@ -9,6 +9,7 @@
 #include <fstream>
 #include <cstdio>
 #include "qr_decoder.hpp"
+#include <arpa/inet.h>
 
 //TODO actually use these arguments
 struct server_args *args = (struct server_args *) malloc(sizeof(server_args));
@@ -103,7 +104,7 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 
-    std::cout << "DEBUG: Bind to socket " << listen_sock << " successful" << std::endl;
+    std::cout << "DEBUG: Bind to socket " << listen_sock << " successful, ip: " << inet_ntoa(((struct sockaddr_in *)res->ai_addr)->sin_addr) << std::endl;
 
     if(listen(listen_sock, args->max_users) != 0){
         std::cout << "listen failure" << std::endl;
