@@ -1,0 +1,1 @@
+java -cp javase.jar:core.jar com.google.zxing.client.j2se.CommandLineRunner [image file]
