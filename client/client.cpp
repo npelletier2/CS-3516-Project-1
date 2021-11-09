@@ -7,11 +7,35 @@
 #include <string.h>
 #include <unistd.h>
 
+size_t recv_wrapper(int sock, char *buf, size_t n, int flags){
+    char temp[n];//buffer to store message parts
+    
+    //loop until entire message is received
+    size_t bytes_received = 0;
+    size_t tot_bytes_received = 0;
+    while(tot_bytes_received < n){
+        bytes_received = recv(sock, temp, n, flags);
+        if(bytes_received < 0){//error with recv
+            std::cout << "recv failure" << std::endl;
+            exit(1);
+        }
+        if(bytes_received == 0){//message finished, end loop
+            break;
+        }else{//append received message to buf
+            int bytes_to_copy = std::min(bytes_received, n-tot_bytes_received); //this prevents overflow of the buf buffer
+            memcpy(buf+tot_bytes_received, temp, bytes_to_copy);
+            tot_bytes_received += bytes_to_copy;
+        }
+    }
+
+    return tot_bytes_received;
+}
+
 void send_file(FILE* msg, int sock){
     //get size of file
     struct stat st;
     fstat(fileno(msg), &st);
-    int size = st.st_size;
+    unsigned int size = st.st_size;
     std::cout << "size of file: " << size << std::endl;
 
     //read file into buffer
@@ -34,15 +58,22 @@ void send_file(FILE* msg, int sock){
     std::cout << "Sent message: " << msg << std::endl;
 }
 
-void receive_msg(char *msg, int buf_size, int sock){
-    // TODO: trying to add this chunk of code to recieve from the socket totally stops the server for some reason
+void receive_msg(char *msg, unsigned int *code, unsigned int buf_size, int sock){
+    unsigned int recv_size;
+
+    recv_wrapper(sock, (char *)code, sizeof(unsigned int), 0);
+
+    recv_wrapper(sock, (char *)&recv_size, sizeof(recv_size), 0);
+
+    buf_size = std::min(buf_size, recv_size); //prevents overflow
+
     char buf[buf_size + 1]; //buffer for incoming message parts
     memset(msg, 0, buf_size+1);
     memset(buf, 0, buf_size+1);
     
     //loop until entire message has been received or received message is larger than buf_size
-    int bytes_received = 0;
-    int tot_bytes_received = 0;
+    unsigned int bytes_received = 0;
+    unsigned int tot_bytes_received = 0;
     while(tot_bytes_received < buf_size){
         bytes_received = recv(sock, buf, buf_size, 0);
         if(bytes_received < 0){//error with recv
@@ -104,11 +135,12 @@ int main(int argc, char *argv[]){
 
     int buf_size = 1023;
     char recv_msg[buf_size+1];
-    receive_msg(recv_msg, buf_size, sock);
+    unsigned int code;
+    receive_msg(recv_msg, &code, buf_size, sock);
 
     close(sock);
 
-    std::cout << "Message received:\n" << recv_msg << std::endl;
+    std::cout << "Message received:\nCode: " << code << "\nMessage:\n" << recv_msg << std::endl;
 
     return 0;
 }
