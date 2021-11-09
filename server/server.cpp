@@ -10,9 +10,18 @@
 #include <cstdio>
 #include "qr_decoder.hpp"
 #include <arpa/inet.h>
+#include <time.h>
 
 //TODO actually use these arguments
 struct server_args *args = (struct server_args *) malloc(sizeof(server_args));
+
+void admin_log(std::string msg, std::string from = "SERVER"){
+    time_t now_time_t = time(0);
+    struct tm time_struct = *localtime(&now_time_t);
+    char now[80];
+    strftime(now, sizeof(now), "%F %T ", &time_struct);
+    std::cout << now << from << ": " << msg << std::endl;
+}
 
 //returns the number of bytes recieved into buf
 int recv_wrapper(int sock, char *buf, size_t n, int flags){
@@ -39,7 +48,7 @@ int recv_wrapper(int sock, char *buf, size_t n, int flags){
     return tot_bytes_received;
 }
 
-void handle_client(int new_sock){
+void handle_client(int new_sock, std::string ip){
     //get the size of the file
     int msg_size;
     recv_wrapper(new_sock, (char *)&msg_size, sizeof(int), 0);
@@ -61,7 +70,7 @@ void handle_client(int new_sock){
     qr_file.write(msg, tot_bytes_received);
     qr_file.close();
 
-    std::cout << "DEBUG: Received message, stored in " << qr_filename << std::endl;
+    admin_log("Recieved message", ip);
 
     //decode the qr image
     std::string qr_decoded = decode_qr(qr_filename);
@@ -69,13 +78,15 @@ void handle_client(int new_sock){
     //delete file used to store qr code image
     remove(qr_filename.c_str());
 
-    std::cout << "DEBUG: " << qr_filename << " deleted" << std::endl;
+    admin_log("QR decoded", ip);
 
     //send the string from the qr code back to client
     off_t bytes_sent = 0;
     while(bytes_sent < qr_decoded.size()){
         bytes_sent += send(new_sock, qr_decoded.c_str(), qr_decoded.size(), 0);
     }
+
+    admin_log("Decoded QR sent", ip);
 }
 
 int main(int argc, char *argv[]){
@@ -86,7 +97,7 @@ int main(int argc, char *argv[]){
     int listen_sock; //socket descriptor of the socket that is listening for incoming connections
 
     struct sockaddr_storage client_addr; //address info for the client
-    socklen_t addr_size; //size of client_addr
+    socklen_t addr_size = sizeof(client_addr); //size of client_addr
     int new_sock; //socket descriptor of the socket used to handle client-server interaction (result of call to accept)
 
     memset(&hints, 0, sizeof(hints));
@@ -101,45 +112,45 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 
-    std::cout << "DEBUG: getaddrinfo complete" << std::endl;
-
     if((listen_sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0){
         std::cout << "socket failure" << std::endl;
         exit(1);
     }
-
-    std::cout << "DEBUG: Created socket " << listen_sock << std::endl;
 
     if(bind(listen_sock, res->ai_addr, res->ai_addrlen) != 0){
         std::cout << "bind failure" << std::endl;
         exit(1);
     }
 
-    std::cout << "DEBUG: Bind to socket " << listen_sock << " successful, ip: " << inet_ntoa(((struct sockaddr_in *)res->ai_addr)->sin_addr) << std::endl;
-
     if(listen(listen_sock, args->max_users) != 0){
         std::cout << "listen failure" << std::endl;
         exit(1);
     }
 
-    std::cout << "DEBUG: Listening on socket " << listen_sock << std::endl;
+    admin_log("Listening on socket " + std::to_string(listen_sock));
 
-    //TODO: Make a new process when a client is accepted
-    addr_size = sizeof(client_addr);
-    if((new_sock = accept(listen_sock, (struct sockaddr *)&client_addr, (socklen_t *)&addr_size)) == -1){
-        std::cout << "accept failure" << std::endl;
-        exit(1);
+    while(1){
+        if((new_sock = accept(listen_sock, (struct sockaddr *)&client_addr, (socklen_t *)&addr_size)) == -1){
+            std::cout << "accept failure" << std::endl;
+            exit(1);
+        }
+
+        std::string client_ip = inet_ntoa(((struct sockaddr_in *)&client_addr)->sin_addr);
+        admin_log("Connection accepted", client_ip);
+
+        int fork_ret = fork();
+        if(fork_ret == -1){
+            std::cout << "fork failure" << std::endl;
+            exit(1);
+        }
+        if(fork_ret != 0){//parent
+            close(new_sock);
+        }else{//child
+            close(listen_sock);
+            handle_client(new_sock, client_ip);
+            close(new_sock);
+            admin_log("Connection closed by server", client_ip);
+            exit(0);
+        }
     }
-
-    std::cout << "DEBUG: Connection on socket " << listen_sock << " accepted" << std::endl;
-
-    close(listen_sock);
-
-    //Communicating on socket new_sock
-
-    handle_client(new_sock);
-
-    close(new_sock);
-
-    return 0;
 }
