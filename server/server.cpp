@@ -16,13 +16,14 @@
 
 //TODO actually use these arguments
 struct server_args *args = (struct server_args *) malloc(sizeof(server_args));
+std::ofstream serv_log("server.log", std::ios_base::app);
 
 void admin_log(std::string msg, std::string from = "SERVER"){
     time_t now_time_t = time(0);
     struct tm time_struct = *localtime(&now_time_t);
     char now[80];
     strftime(now, sizeof(now), "%F %T ", &time_struct);
-    std::cout << now << from << ": " << msg << std::endl;
+    serv_log << now << from << ": " << msg << std::endl;
 }
 
 //returns the number of bytes recieved into buf
