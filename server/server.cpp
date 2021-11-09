@@ -14,34 +14,44 @@
 //TODO actually use these arguments
 struct server_args *args = (struct server_args *) malloc(sizeof(server_args));
 
-void handle_client(int new_sock){
-    int buf_size = 10240; //10 kB
-    char buf[buf_size + 1]; //buffer for incoming message parts
-    char msg[buf_size + 1]; //total message recieved so far
-    memset(msg, 0, sizeof(msg));
-    memset(buf, 0, sizeof(buf));
+//returns the number of bytes recieved into buf
+int recv_wrapper(int sock, char *buf, size_t n, int flags){
+    char temp[n];//buffer to store message parts
     
-    //loop until entire message has been received or received message is larger than buf_size
-    int bytes_received = 0;
-    int tot_bytes_received = 0;
-    while(tot_bytes_received < buf_size){
-        std::cout << "calling recv" << std::endl;
-        bytes_received = recv(new_sock, buf, buf_size, 0);
-        std::cout << "bytes received: " << bytes_received << std::endl;
+    //loop until entire message is received
+    size_t bytes_received = 0;
+    size_t tot_bytes_received = 0;
+    while(tot_bytes_received < n){
+        bytes_received = recv(sock, temp, n, flags);
         if(bytes_received < 0){//error with recv
             std::cout << "recv failure" << std::endl;
             exit(1);
         }
         if(bytes_received == 0){//message finished, end loop
             break;
-        }else{//append received message to msg
-            int bytes_to_copy = std::min(bytes_received, buf_size-tot_bytes_received); //this prevents overflow of the msg buffer
-            memcpy(msg+tot_bytes_received, buf, bytes_to_copy);
+        }else{//append received message to buf
+            int bytes_to_copy = std::min(bytes_received, n-tot_bytes_received); //this prevents overflow of the buf buffer
+            memcpy(buf+tot_bytes_received, temp, bytes_to_copy);
             tot_bytes_received += bytes_to_copy;
         }
     }
 
-    std::cout << "DEBUG: Total bytes received: " << tot_bytes_received << std::endl;
+    return tot_bytes_received;
+}
+
+void handle_client(int new_sock){
+    //get the size of the file
+    int msg_size;
+    recv_wrapper(new_sock, (char *)&msg_size, sizeof(int), 0);
+
+    //max 100 KB
+    if(msg_size > 102400){
+        msg_size = 102400;
+    }
+
+    //get the qr image
+    char msg[msg_size];
+    int tot_bytes_received = recv_wrapper(new_sock, msg, msg_size, 0);
 
     //use PID for filename to ensure different filenames for different concurrent threads
     std::string qr_filename = "qr_images/" + std::to_string(getpid()) + ".png";
@@ -53,6 +63,7 @@ void handle_client(int new_sock){
 
     std::cout << "DEBUG: Received message, stored in " << qr_filename << std::endl;
 
+    //decode the qr image
     std::string qr_decoded = decode_qr(qr_filename);
 
     //delete file used to store qr code image

@@ -11,17 +11,22 @@ void send_file(FILE* msg, int sock){
     //get size of file
     struct stat st;
     fstat(fileno(msg), &st);
-    off_t size = st.st_size;
+    int size = st.st_size;
     std::cout << "size of file: " << size << std::endl;
 
     //read file into buffer
     char buf[size];
     fread(buf, size, 1, msg);
 
-    //send buffer
-    off_t bytes_sent = 0;
+    //make a buffer that includes the size of the file in front
+    char tosend[size+sizeof(int)];
+    memcpy(tosend, &size, sizeof(int));
+    memcpy(tosend+sizeof(int), buf, sizeof(buf));
+
+    //send tosend buffer
+    int bytes_sent = 0;
     while(bytes_sent < size){
-        bytes_sent += send(sock, buf, size, 0);
+        bytes_sent += send(sock, tosend, size+sizeof(int), 0);
     }
 
     std::cout << "bytes sent: " << bytes_sent << std::endl;
@@ -39,9 +44,7 @@ void receive_msg(char *msg, int buf_size, int sock){
     int bytes_received = 0;
     int tot_bytes_received = 0;
     while(tot_bytes_received < buf_size){
-        std::cout << "calling recv" << std::endl;
         bytes_received = recv(sock, buf, buf_size, 0);
-        std::cout << "bytes received: " << bytes_received << std::endl;
         if(bytes_received < 0){//error with recv
             std::cout << "recv failure" << std::endl;
             exit(1);
