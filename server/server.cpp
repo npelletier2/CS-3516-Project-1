@@ -14,7 +14,6 @@
 #include <vector>
 #include <sys/wait.h>
 
-//TODO actually use these arguments
 struct server_args *args = (struct server_args *) malloc(sizeof(server_args));
 std::ofstream serv_log("server.log", std::ios_base::app);
 
