@@ -167,7 +167,7 @@ void handle_client(int new_sock, std::string ip){
         std::string qr_decoded = decode_qr(qr_filename);
 
         //delete file used to store qr code image
-        remove(qr_filename.c_str());
+	remove(qr_filename.c_str());
 
         admin_log("QR decoded", ip);
 

@@ -2,7 +2,6 @@
 #include <string>
 #include <array>
 #include <memory>
-#include "qr_decoder.hpp"
 
 std::string decode_qr(std::string filename){
     //TODO
@@ -16,5 +15,11 @@ std::string decode_qr(std::string filename){
         result += buffer.data();
     }
 
+    std::cout << result << std::endl;
+
     return result;
+}
+
+int main(){
+    std::string result = decode_qr("client/qr_testing/project1_qr_code.png");
 }
