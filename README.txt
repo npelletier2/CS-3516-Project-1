@@ -1,7 +1,9 @@
-Compile both the server and the client bu running 'make' or 'make all' in this directory.
+Compile both the server and the client by running 'make' or 'make all' in this directory.
 The client and server can also be compiled separately by running 'make' or 'make all' in their respective directories.
 
-Run the server using './QRServer' in the 'server' directory, and run the client using './client' int the 'client' directory.
+Run the server using './QRServer' in the 'server' directory, and run the client using './client' in the 'client' directory.
+
+Requires Java to run, only runs on Linux.
 
 The client sends four requests as fast as possible. This demonstrates the ability of the server to handle multiple requests from one client and shows that the server refuses a request if it exceeds the rate limit.
 
